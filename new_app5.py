@@ -245,17 +245,24 @@ with tab3:
         del st.session_state["update_success"]
 
 # --- Tab 4 ---
+# --- Tab 4: Low Stock Reminder --- #
 with tab4:
     st.header("🔔 Low Stock Alerts")
+
+    # Ensure a threshold is explicitly set
     if "threshold_set" not in st.session_state:
         st.session_state["threshold_set"] = False
+    if "enable_alerts" not in st.session_state:
+        st.session_state["enable_alerts"] = False
 
     low_stock_threshold = st.slider("Set Stock Threshold", min_value=1, max_value=100, value=10, key="threshold_slider")
+    enable_alerts = st.checkbox("Enable Telegram Alert", value=st.session_state.get("enable_alerts", False))
 
     if st.button("Apply Threshold"):
         st.session_state["threshold_value"] = low_stock_threshold
         st.session_state["threshold_set"] = True
-        st.session_state["notified_products"] = []
+        st.session_state["enable_alerts"] = enable_alerts
+        st.session_state["notified_products"] = []  # Reset when threshold changes
         st.success(f"Threshold of {low_stock_threshold} applied.")
 
     if st.session_state["threshold_set"]:
@@ -266,17 +273,16 @@ with tab4:
         current_low_stock_ids = set(low_stock_df["id"].tolist())
         previous_notified_ids = set(st.session_state.get("notified_products", []))
 
-        if current_low_stock_ids != previous_notified_ids and not low_stock_df.empty:
-            header = f"🚨 The following products are low in stock (Threshold: {threshold}):\n"
-            product_lines = [
-                f"- {row['product_name']} | Category: {row['category']} | Qty: {row['quantity']}"
-                for _, row in low_stock_df.iterrows()
-            ]
-            message = header + "\n".join(product_lines)
-
-            send_telegram_message(message)
-            st.info("📤 Notification sent to Telegram.")
-            st.session_state["notified_products"] = list(current_low_stock_ids)
+        if st.session_state.get("enable_alerts", False):
+            if current_low_stock_ids != previous_notified_ids and not low_stock_df.empty:
+                # Telegram Notification
+                message_lines = [f"🚨 The following products are low in stock (Threshold: {threshold}):"]
+                for row in low_stock_df.itertuples():
+                    message_lines.append(f"- {row.product_name} ({row.category}): {row.quantity} left")
+                final_message = "\n".join(message_lines)
+                send_telegram_message(final_message)
+                st.info("📤 Notification sent to Telegram.")
+                st.session_state["notified_products"] = list(current_low_stock_ids)
 
         if not low_stock_df.empty:
             st.warning(f"🚨 {len(low_stock_df)} product(s) are below the stock threshold!")
