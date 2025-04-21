@@ -5,7 +5,7 @@ import requests
 import uuid
 import sqlite3
 
-# Telegram credentials (for low stock alerts only)
+# Telegram credentials
 TELEGRAM_BOT_TOKEN = "7299989631:AAHhTyw9VvmsiXCkapYzU08Qz6FGTIdyeUc"
 TELEGRAM_CHAT_ID = "7005860166"
 
@@ -67,7 +67,7 @@ def delete_product(product_id):
     c.execute("DELETE FROM inventory WHERE id = ?", (product_id,))
     conn.commit()
     conn.close()
-    st.session_state["delete_success"] = "🗑️  Product deleted successfully"
+    st.session_state["delete_success"] = "🗑️   Product deleted successfully"
 
 # Update product quantity and/or price
 def update_product_details(product_id, new_quantity=None, new_price=None):
@@ -93,7 +93,6 @@ def insert_products_from_api():
                 category = str(product.get('category', 'Uncategorized'))
                 quantity = int(product.get('stock', 100))
                 raw_price = product.get('price', 0)
-
                 if isinstance(raw_price, (int, float, str)):
                     price = float(str(raw_price).replace('$', '').replace(',', '').strip())
                 else:
@@ -104,13 +103,12 @@ def insert_products_from_api():
                 st.warning(f"⛔ Skipped product: {product.get('title', 'Unknown')} → {e}")
         st.session_state["api_success"] = True
 
-# Load from user-uploaded file (optimized batch insert)
+# Load from user-uploaded file
 def insert_products_from_file(uploaded_file):
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             df = df[['product_name', 'category', 'quantity', 'price']]
-
             df['id'] = [str(uuid.uuid4()) for _ in range(len(df))]
             records = df[['id', 'product_name', 'category', 'quantity', 'price']].values.tolist()
 
@@ -126,7 +124,7 @@ def insert_products_from_file(uploaded_file):
         except Exception as e:
             st.error(f"Failed to upload data: {e}")
 
-# Set custom styling with original background image
+# UI Styling
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
@@ -134,7 +132,7 @@ st.markdown("""
             font-family: 'Poppins', sans-serif !important;
         }
         .stApp {
-            background-image: url("https://img.freepik.com/free-photo/abstract-digital-grid-black-background_53876-97647.jpg?t=st=1744726543~exp=1744730143~hmac=7ef6b213d6b7dd59bf88fa24f265e1a3cf76625fe72316c4d944bf83423eb8ca&w=1800");
+            background-image: url("https://img.freepik.com/free-photo/abstract-digital-grid-black-background_53876-97647.jpg");
             background-size: cover;
             background-repeat: no-repeat;
             background-attachment: fixed;
@@ -145,23 +143,17 @@ st.markdown("""
             padding-top: 2rem;
             padding-bottom: 2rem;
         }
-        .css-1d391kg p, .css-1d391kg label {
-            color: #ffffff !important;
- }
     </style>
 """, unsafe_allow_html=True)
 
-# Streamlit Layout
 st.title("🛒 E-commerce Inventory Management")
 init_db()
 
-# Tabs
 tab1, tab2, tab3, tab4 = st.tabs(["Inventory Dashboard", "Add/Delete Products", "Update Stock/Price", "Low Stock Reminder"])
 
-# --- Tab 1: Dashboard --- #
+# --- Tab 1 ---
 with tab1:
     st.header("📦 Inventory Overview")
-
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("📥 Load Data From Dummy API")
@@ -171,14 +163,11 @@ with tab1:
 
     with col2:
         st.subheader("📤 Upload Your Own Inventory File")
-        st.markdown("**Upload CSV file with headers: `product_name`, `category`, `quantity`, `price`**")
         uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
-
         if uploaded_file and not st.session_state.get("uploaded"):
-            with st.spinner("Uploading and processing your file..."):
-                insert_products_from_file(uploaded_file)
-                st.session_state["uploaded"] = True
-                st.rerun()
+            insert_products_from_file(uploaded_file)
+            st.session_state["uploaded"] = True
+            st.rerun()
 
     for key in ["api_success", "file_success", "clear_success"]:
         if st.session_state.get(key):
@@ -202,18 +191,15 @@ with tab1:
         st.dataframe(renamed_df)
 
         st.subheader("📊 Category-wise Stock Distribution")
-        fig = px.bar(df, x='category', y='quantity', color='category', title='Stock by Category')
-        st.plotly_chart(fig)
+        st.plotly_chart(px.bar(df, x='category', y='quantity', color='category'))
 
         st.subheader("💰 Average Product Price per Category")
         avg_prices = df.groupby('category', as_index=False)['price'].mean()
-        fig2 = px.pie(avg_prices, names='category', values='price', title='Average Price by Category')
-        st.plotly_chart(fig2)
+        st.plotly_chart(px.pie(avg_prices, names='category', values='price'))
 
-# --- Tab 2: Add/Delete Products --- #
+# --- Tab 2 ---
 with tab2:
     st.header("➕ Add or ❌ Delete Products")
-
     with st.form("add_form"):
         pname = st.text_input("Product Name")
         pcat = st.text_input("Category")
@@ -240,18 +226,16 @@ with tab2:
         st.success(st.session_state["delete_success"])
         del st.session_state["delete_success"]
 
-# --- Tab 3: Update Stock/Price --- #
+# --- Tab 3 ---
 with tab3:
     st.header("✏️ Update Stock or Price")
-
     df = get_inventory()
     if not df.empty:
         product_options = [f"{row.product_name} ({row.id})" for row in df.itertuples()]
         selected = st.selectbox("Select Product to Update", product_options)
         pid = selected.split('(')[-1].strip(')')
-        new_qty = st.number_input("New Quantity (leave blank if unchanged)", min_value=0, step=1, value=0)
-        new_price = st.number_input("New Price (leave blank if unchanged)", min_value=0.0, step=0.1, value=0.0, format="%.2f")
-
+        new_qty = st.number_input("New Quantity", min_value=0, value=0)
+        new_price = st.number_input("New Price", min_value=0.0, value=0.0, format="%.2f")
         if st.button("Update"):
             update_product_details(pid, new_quantity=new_qty if new_qty > 0 else None, new_price=new_price if new_price > 0 else None)
             st.rerun()
@@ -260,30 +244,48 @@ with tab3:
         st.success(st.session_state["update_success"])
         del st.session_state["update_success"]
 
-# --- Tab 4: Low Stock Reminder --- #
+# --- Tab 4 ---
 with tab4:
     st.header("🔔 Low Stock Alerts")
+    if "threshold_set" not in st.session_state:
+        st.session_state["threshold_set"] = False
 
-    low_stock_threshold = st.slider("Set Stock Threshold", min_value=1, max_value=100, value=10)
+    low_stock_threshold = st.slider("Set Stock Threshold", min_value=1, max_value=100, value=10, key="threshold_slider")
 
-    df = get_inventory()
-    low_stock_df = df[df['quantity'] < low_stock_threshold]
+    if st.button("Apply Threshold"):
+        st.session_state["threshold_value"] = low_stock_threshold
+        st.session_state["threshold_set"] = True
+        st.session_state["notified_products"] = []
+        st.success(f"Threshold of {low_stock_threshold} applied.")
 
-    if not low_stock_df.empty:
-        st.warning(f"🚨 {len(low_stock_df)} product(s) are below the stock threshold!")
-        st.dataframe(low_stock_df.rename(columns={
-            'product_name': '🛍️   Product Name',
-            'category': '📂 Category',
-            'quantity': '📦 Quantity',
-            'price': '💲 Price ($)'
-        }))
+    if st.session_state["threshold_set"]:
+        df = get_inventory()
+        threshold = st.session_state.get("threshold_value", 10)
+        low_stock_df = df[df["quantity"] < threshold]
 
-        # Compose single Telegram message
-        message_lines = [f"🚨 The following products are low in stock with threshold as {low_stock_threshold}:"]
-        for row in low_stock_df.itertuples():
-            message_lines.append(f"- {row.product_name} ({row.category}): {row.quantity} left")
-        final_message = "\n".join(message_lines)
-        send_telegram_message(final_message)
-    else:
-        st.success("✅ All products are sufficiently stocked.")
+        current_low_stock_ids = set(low_stock_df["id"].tolist())
+        previous_notified_ids = set(st.session_state.get("notified_products", []))
+
+        if current_low_stock_ids != previous_notified_ids and not low_stock_df.empty:
+            header = f"🚨 The following products are low in stock (Threshold: {threshold}):\n"
+            product_lines = [
+                f"- {row['product_name']} | Category: {row['category']} | Qty: {row['quantity']}"
+                for _, row in low_stock_df.iterrows()
+            ]
+            message = header + "\n".join(product_lines)
+
+            send_telegram_message(message)
+            st.info("📤 Notification sent to Telegram.")
+            st.session_state["notified_products"] = list(current_low_stock_ids)
+
+        if not low_stock_df.empty:
+            st.warning(f"🚨 {len(low_stock_df)} product(s) are below the stock threshold!")
+            st.dataframe(low_stock_df.rename(columns={
+                'product_name': '🛍️   Product Name',
+                'category': '📂 Category',
+                'quantity': '📦 Quantity',
+                'price': '💲 Price ($)'
+            }))
+        else:
+            st.success("✅ All products are sufficiently stocked.")
 
